@@ -1,0 +1,16 @@
+version: '2'
+
+services:
+  neo4j:
+    image: neo4j:3.1.0
+    environment:
+      - NEO4J_AUTH=none
+    volumes:
+      - ./volumes/neo4j/data:/data
+      - ./volumes/neo4j/logs:/logs
+    expose:
+      - "7474"
+      - "7687"
+    ports:
+      - "7474:7474"
+      - "7687:7687"
