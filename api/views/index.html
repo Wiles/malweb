@@ -1,0 +1,86 @@
+<html>
+  <head>
+    <script src="/axios.min.js"></script>
+    <style>
+      table, th, td {
+        border: 1px solid black;
+      }
+      td {
+        width: 100px;
+      }
+      textarea {
+        width: 200px;
+        height: 200px;
+      }
+    </style>
+  </head>
+  <body>
+    <p>Top Staff</p>
+    <table id='topStaff'>
+      <tr>
+        <th>Staff</th>
+        <th>Meta Score</th>
+      </tr>
+    </table>
+    <p>Top Anime</p>
+    <table id='topAnime'>
+      <tr>
+        <th>Anime</th>
+        <th>Score</th>
+        <th>Meta Score</th>
+      </tr>
+    </table>
+    <script>
+      (function() {
+        const user = {
+          name: 'Wiles',
+          id: 1115285
+        }
+        axios.get(`/graphql?query=query { user (name: "${user.name}"){ staffList{ id name metascore } animeList{ id name score metascore } }}`)
+        .then(({data}) => {
+          const staffTable = document.getElementById('topStaff');
+          data.data.user.staffList.forEach((staff) => {
+            const tr = document.createElement('tr');
+            staffTable.append(tr);
+
+            let td = document.createElement('td');
+            let a = document.createElement('a');
+            a.href = `/staff?id=${staff.id}&user=${user.id}`;
+            a.innerHTML = staff.name;
+            td.append(a);
+            tr.append(td);
+
+            td = document.createElement('td');
+            td.innerHTML = staff.metascore;
+            tr.append(td);
+          });
+
+          const animeTable = document.getElementById('topAnime');
+          data.data.user.animeList.forEach((anime) => {
+
+            const tr = document.createElement('tr');
+            animeTable.append(tr);
+
+            let td = document.createElement('td');
+            let a = document.createElement('a');
+            a.href = `/anime?id=${anime.id}&user=${user.id}`;
+            a.innerHTML = anime.name;
+            td.append(a);
+            tr.append(td);
+
+            td = document.createElement('td');
+            td.innerHTML = anime.score;
+            tr.append(td);
+
+            td = document.createElement('td');
+            td.innerHTML = anime.metascore.toPrecision(3);
+            tr.append(td);
+          })
+        })
+        .catch((error) => {
+          console.error(error);
+        })
+      })();
+    </script>
+  </body>
+</html>

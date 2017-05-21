@@ -7,7 +7,7 @@ from lxml import etree
 
 statuses = ['0', 'watching', 'completed', 'on hold', 'dropped', '5', 'plan to watch']
 
-graph = Graph("http://localhost:7474/db/data/")
+graph = Graph()
 
 
 def fetch_anime_staff(request):
@@ -143,15 +143,48 @@ def update_user(client, name):
         handle_anime(client, user_id, anime)
 
 
-def update_metascores(client, name):
-    client.command('')
+def update_metascores(client, user_id):
+    client.run('MATCH (user:User {id: toInteger({user_id})})-[s:META_SCORED]->() DETACH DELETE s', {
+        'user_id': user_id
+    })
+
+    client.run('''
+        MATCH (user:User {id: toInteger({user_id})})-[rating:Rated]->(anime:Anime)<-[:WorkedOn]-(staff:Staff)
+        WITH
+            user,
+            count(anime) as count,
+            staff,
+            avg(rating.score) as metascore
+        CREATE (user)-[score:META_SCORED]->(staff)
+        SET score.value = metascore
+        SET score.count = count
+    ''', {
+        'user_id': user_id
+    })
+
+    client.run('MATCH ()-[meta:META_SCORED]-() WHERE meta.count <= 5 DETACH DELETE meta')
+
+    client.run('''
+        MATCH (user:User {id: toInteger({user_id})})-[score:META_SCORED]->(staff:Staff)-[:WorkedOn]->(anime:Anime)
+        WITH
+            user,
+            count(staff) as count,
+            anime,
+            avg(score.value) as metascore
+        CREATE (user)-[score:META_SCORED]->(anime)
+        SET score.value = metascore
+        set score.count = count
+    ''', {
+        'user_id': user_id
+    })
+
+    client.run('MATCH ()-[meta:META_SCORED]-() WHERE meta.count <= 5 DETACH DELETE meta')
 
 if __name__ == "__main__":
     try:
-        update_user(graph, 'Wiles')
-        update_shows(graph)
-        update_staff(graph)
-        # update_metascores(client, 'Wiles')
+        # update_user(graph, 'Wiles')
+        # update_shows(graph)
+        # update_staff(graph)
+        update_metascores(graph, 1115285)
     finally:
-        # graph.close()
         pass

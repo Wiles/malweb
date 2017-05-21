@@ -1,0 +1,80 @@
+<html>
+  <head>
+    <script src="/axios.min.js"></script>
+    <style>
+      table, th, td {
+        border: 1px solid black;
+      }
+      td {
+        width: 100px;
+      }
+      textarea {
+        width: 200px;
+        height: 200px;
+      }
+    </style>
+  </head>
+  <body>
+    <table id='staff'>
+      <tr>
+        <th>Staff</th>
+        <th>Meta Score</th>
+      </tr>
+    </table>
+    <p>Anime</p>
+    <table id='anime'>
+      <tr>
+        <th>Anime</th>
+        <th>Score</th>
+        <th>Meta Score</th>
+      </tr>
+    </table>
+    <script>
+      (function() {
+        const params = (new URL(document.location)).searchParams;
+        const userId = params.get("user");
+        const staffId = params.get("id");
+        axios.get(`/graphql?query=query { staff(id: ${staffId}, user: ${userId}) { id name metascore animeList { id name score metascore } } }`)
+        .then(({data}) => {
+          const staffTable = document.getElementById('staff');
+
+          const tr = document.createElement('tr');
+          staffTable.append(tr);
+
+          td = document.createElement('td');
+          td.innerHTML = data.data.staff.name;
+          tr.append(td);
+
+          td = document.createElement('td');
+          td.innerHTML = data.data.staff.metascore
+          tr.append(td);
+
+          const animeTable = document.getElementById('anime');
+          data.data.staff.animeList.forEach((anime) => {
+
+            const tr = document.createElement('tr');
+            animeTable.append(tr);
+
+            let td = document.createElement('td');
+            let a = document.createElement('a');
+            a.href = `/anime?id=${anime.id}&user=${userId}`;
+            a.innerHTML = anime.name;
+            td.append(a);
+            tr.append(td);
+
+            td = document.createElement('td');
+            td.innerHTML = anime.score;
+            tr.append(td);
+
+            td = document.createElement('td');
+            td.innerHTML = anime.metascore?anime.metascore.toPrecision(3):'';
+            tr.append(td);
+          })
+        })
+        .catch((error) => {
+          console.error(error);
+        })
+      })();
+    </script>
+  </body>
+</html>

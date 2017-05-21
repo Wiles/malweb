@@ -1,0 +1,82 @@
+<html>
+  <head>
+    <script src="/axios.min.js"></script>
+    <style>
+      table, th, td {
+        border: 1px solid black;
+      }
+      td {
+        width: 100px;
+      }
+      textarea {
+        width: 200px;
+        height: 200px;
+      }
+    </style>
+  </head>
+  <body>
+    <table id='anime'>
+      <tr>
+        <th>Name</th>
+        <th>Score</th>
+        <th>Meta Score</th>
+      </tr>
+    </table>
+    <p>Staff</p>
+    <table id='staff'>
+      <tr>
+        <th>Staff</th>
+        <th>Meta Score</th>
+      </tr>
+    </table>
+    <script>
+      (function() {
+        const params = (new URL(document.location)).searchParams;
+        const userId = params.get("user");
+        const animeId = params.get("id");
+        axios.get(`/graphql?query=query { anime(id: ${animeId}, user: ${userId}) { id name score metascore staffList { id name metascore } } }`)
+        .then(({data}) => {
+          const animeTable = document.getElementById('anime');
+
+
+          const tr = document.createElement('tr');
+          animeTable.append(tr);
+
+          td = document.createElement('td');
+          td.innerHTML = data.data.anime.name;
+          tr.append(td);
+
+          td = document.createElement('td');
+          td.innerHTML = data.data.anime.score;
+          tr.append(td);
+
+          td = document.createElement('td');
+          td.innerHTML = data.data.anime.metascore
+          tr.append(td);
+
+          const staffTable = document.getElementById('staff');
+          data.data.anime.staffList.forEach((staff) => {
+
+            const tr = document.createElement('tr');
+            staffTable.append(tr);
+
+            let td = document.createElement('td');
+            let a = document.createElement('a');
+            a.href = `/staff?id=${staff.id}&user=${userId}`;
+            a.innerHTML = staff.name;
+            td.append(a);
+            tr.append(td);
+
+
+            td = document.createElement('td');
+            td.innerHTML = staff.metascore?staff.metascore.toPrecision(3):'';
+            tr.append(td);
+          })
+        })
+        .catch((error) => {
+          console.error(error);
+        })
+      })();
+    </script>
+  </body>
+</html>
