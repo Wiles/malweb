@@ -3,49 +3,53 @@ import xmltodict
 import re
 from py2neo import Graph
 import time
-from lxml import etree
+from argparse import ArgumentParser
 
 statuses = ['0', 'watching', 'completed', 'on hold', 'dropped', '5', 'plan to watch']
-
-graph = Graph()
 
 
 def fetch_anime_staff(request):
     staff = {}
-    with urlopen(request) as response:
+    with urlopen(request, timeout=5) as response:
         html_content = response.read()
         encoding = response.headers.get_content_charset('utf-8')
         html_text = html_content.decode(encoding, errors='ignore')
         html_text = html_text[html_text.index('Add staff'):]
-        for m in re.findall('"/people/\d+/[^"]+"', html_text):
-            _, _, id, name = m[1:-1].split('/')
+        for m in re.findall('/people/\d+/[^"]+', html_text):
+            _, id, name = m[1:-1].split('/')
+            print(f'staff: {id} {name}')
             staff[id] = name
 
     return staff
 
 
 def update_shows(client):
-    now = time.time()
-    anime_list = client.run('MATCH (anime:Anime) WHERE coalesce(anime.last_updated, 0) < ({now} - 60 * 60 * 24) RETURN anime.id as id, anime.name as name ORDER BY anime.name ASC', {
-        'now': now
-    })
-    for anime in anime_list:
-        anime_id = anime['id']
-        staff = fetch_anime_staff(f'https://myanimelist.net/anime/{anime_id}/placeholder/characters')
-        for staff_id, name in staff.items():
-            client.run('MERGE (staff:Staff {id: toInteger({staff_id})}) SET staff.name = {name}', {
-                'staff_id': staff_id,
-                'name': name
-            })
-        client.run('MERGE (anime:Anime {id: toInteger({anime_id})}) SET anime.last_updated = {now}', {
-            'anime_id': anime_id,
-            'now': now
+        anime_list = client.run('MATCH (anime:Anime) WHERE coalesce(anime.last_updated, 0) < ({now} - 60 * 60 * 24) RETURN anime.id as id, anime.name as name ORDER BY anime.name ASC', {
+            'now': time.time()
         })
+        for anime in anime_list:
+            try:
+                anime_id = anime['id']
+                anime_name = anime['name']
+                print(f'anime: {anime_id} {anime_name}')
+                staff = fetch_anime_staff(f'https://myanimelist.net/anime/{anime_id}/placeholder/characters')
+                for staff_id, name in staff.items():
+                    print(f'staff: {staff_id} {name}')
+                    client.run('MERGE (staff:Staff {id: toInteger({staff_id})}) SET staff.name = {name}', {
+                        'staff_id': staff_id,
+                        'name': name
+                    })
+                client.run('MERGE (anime:Anime {id: toInteger({anime_id})}) SET anime.last_updated = {now}', {
+                    'anime_id': anime_id,
+                    'now': time.time()
+                })
+            except Exception as e:
+                    print(e)
 
 
 def fetch_staff_anime(request):
     anime = {}
-    with urlopen(request) as response:
+    with urlopen(request, timeout=5) as response:
         html_content = response.read()
         encoding = response.headers.get_content_charset('utf-8')
         html_text = html_content.decode(encoding, errors='ignore')
@@ -58,46 +62,48 @@ def fetch_staff_anime(request):
                 anime[anime_id]['positions'].append(position)
             else:
                 anime[anime_id] = {'positions': [position], 'name': name}
-
     return anime
 
 
 def update_staff(client):
-    now = time.time()
-    staff_list = client.run('MATCH (staff:Staff) WHERE coalesce(staff.last_updated, 0) < ({now} - 60 * 60 * 24) RETURN staff.id as id, staff.name as name ORDER BY name ASC', {
-        'now': now
-    })
-    for staff in staff_list:
-        staff_id = staff['id']
-        name = staff['name']
-
-        print(f'staff: {name}')
-        client.run('MATCH (:Staff {id: toInteger({staff_id})})-[r:WorkedOn]->() DELETE r', {
-            'staff_id': staff_id
+        staff_list = client.run('MATCH (staff:Staff) WHERE coalesce(staff.last_updated, 0) < ({now} - 60 * 60 * 24) RETURN staff.id as id, staff.name as name ORDER BY name ASC', {
+            'now': time.time()
         })
-        anime_list = fetch_staff_anime(f'https://myanimelist.net/people/{staff_id}')
-        for anime_id, anime in anime_list.items():
-            name = anime['name']
-            positions = anime['positions']
-            client.run('MERGE (anime:Anime {id: toInteger({anime_id})}) SET anime.name = {name}', {
-                'anime_id': anime_id,
-                'name': name
-            })
-            for position in positions:
-                client.run('MATCH (anime {id: toInteger({anime_id})}) MATCH (staff:Staff {id: toInteger({staff_id})}) CREATE (staff)-[r:WorkedOn]->(anime) SET r.position = {position}', {
-                    'anime_id': anime_id,
-                    'staff_id': staff_id,
-                    'position': position
+        for staff in staff_list:
+            try:
+                staff_id = staff['id']
+                name = staff['name']
+
+                print(f'staff: {staff_id} {name}')
+                client.run('MATCH (:Staff {id: toInteger({staff_id})})-[r:WorkedOn]->() DELETE r', {
+                    'staff_id': staff_id
                 })
+                anime_list = fetch_staff_anime(f'https://myanimelist.net/people/{staff_id}')
+                for anime_id, anime in anime_list.items():
+                    name = anime['name']
+                    print(f'anime: {anime_id} {name}')
+                    positions = anime['positions']
+                    client.run('MERGE (anime:Anime {id: toInteger({anime_id})}) SET anime.name = {name}', {
+                        'anime_id': anime_id,
+                        'name': name
+                    })
+                    for position in positions:
+                        client.run('MATCH (anime {id: toInteger({anime_id})}) MATCH (staff:Staff {id: toInteger({staff_id})}) CREATE (staff)-[r:WorkedOn]->(anime) SET r.position = trim({position})', {
+                            'anime_id': anime_id,
+                            'staff_id': staff_id,
+                            'position': position
+                        })
 
-        client.run('MERGE (staff:Staff {id: toInteger({staff_id})}) SET staff.last_updated = {now}', {
-            'staff_id': staff_id,
-            'now': now
-        })
+                client.run('MERGE (staff:Staff {id: toInteger({staff_id})}) SET staff.last_updated = {now}', {
+                    'staff_id': staff_id,
+                    'now': time.time()
+                })
+            except Exception as e:
+                print(e)
 
 
 def fetch_anime_list(request):
-    with urlopen(request) as response:
+    with urlopen(request, timeout=5) as response:
         html_content = response.read()
         encoding = response.headers.get_content_charset('utf-8')
         html_text = html_content.decode(encoding, errors='ignore')
@@ -109,7 +115,7 @@ def fetch_anime_list(request):
 def handle_anime(client, user_id, anime):
     anime_id = anime['series_animedb_id']
     name = anime['series_title']
-    rating =anime['my_score']
+    rating = anime['my_score']
 
     client.run('MERGE (anime:Anime {id: toInteger({anime_id})}) SET anime.name = {name}', {
         'anime_id': anime_id,
@@ -127,29 +133,55 @@ def handle_anime(client, user_id, anime):
 
 def update_user(client, name):
     print(f'User: {name}')
-    list_page = f'https://myanimelist.net/malappinfo.php?u={name}&status=all&type=anime'
-    user, anime_list = fetch_anime_list(list_page)
-    index = 0
-    user_id = user['user_id']
-    name = user['user_name']
-    client.run('MERGE (user:User {id: toInteger({user_id})}) SET user.name = {name}', {
-        'user_id': user_id,
+    try:
+        list_page = f'https://myanimelist.net/malappinfo.php?u={name}&status=all&type=anime'
+        user, anime_list = fetch_anime_list(list_page)
+
+        user_id = user['user_id']
+        name = user['user_name']
+        client.run('MERGE (user:User {id: toInteger({user_id})}) SET user.name = {name}', {
+            'user_id': user_id,
+            'name': name
+        })
+        client.run('MATCH (user:User {id: toInteger({user_id})})-[r:Rated]->(anime:Anime) DELETE r', {
+            'user_id': user_id
+        })
+        for anime in anime_list:
+            handle_anime(client, user_id, anime)
+    except Exception as e:
+        print(e)
+
+
+def update_metascores(client, name):
+    print(f'Metascore: {name}')
+    client.run('MATCH (user:User {name: {name}})-[s:META_SCORED]->() DETACH DELETE s', {
         'name': name
     })
-    client.run('MATCH (user:User {id: toInteger({user_id})})-[r:Rated]->(anime:Anime) DELETE r', {
-        'user_id': user_id
-    })
-    for anime in anime_list:
-        handle_anime(client, user_id, anime)
 
-
-def update_metascores(client, user_id):
-    client.run('MATCH (user:User {id: toInteger({user_id})})-[s:META_SCORED]->() DETACH DELETE s', {
-        'user_id': user_id
-    })
+    positions = [
+        'Key Animation',
+        'Director',
+        'Original Creator',
+        'Character Design',
+        'Art Director',
+        'Script',
+        'Animation Director',
+        'Storyboard',
+        'Series Composition',
+        'Episode Director',
+        'Producer',
+        'Color Design',
+        'Chief Animation Director',
+        'Director of Photography',
+        'Music',
+        'Sound Effects',
+        'Mechanical Design',
+        'Director (Chief Director)'
+    ]
 
     client.run('''
-        MATCH (user:User {id: toInteger({user_id})})-[rating:Rated]->(anime:Anime)<-[:WorkedOn]-(staff:Staff)
+        MATCH (user:User {name: {name}})-[rating:Rated]->(anime:Anime)<-[position:WorkedOn]-(staff:Staff)
+        WHERE position.position in {position}
         WITH
             user,
             count(anime) as count,
@@ -159,13 +191,14 @@ def update_metascores(client, user_id):
         SET score.value = metascore
         SET score.count = count
     ''', {
-        'user_id': user_id
+        'name': name,
+        'position': positions
     })
 
     client.run('MATCH ()-[meta:META_SCORED]-() WHERE meta.count <= 5 DETACH DELETE meta')
 
     client.run('''
-        MATCH (user:User {id: toInteger({user_id})})-[score:META_SCORED]->(staff:Staff)-[:WorkedOn]->(anime:Anime)
+        MATCH (user:User {name: {name}})-[score:META_SCORED]->(staff:Staff)-[:WorkedOn]->(anime:Anime)
         WITH
             user,
             count(staff) as count,
@@ -175,16 +208,31 @@ def update_metascores(client, user_id):
         SET score.value = metascore
         set score.count = count
     ''', {
-        'user_id': user_id
+        'name': name
     })
 
     client.run('MATCH ()-[meta:META_SCORED]-() WHERE meta.count <= 5 DETACH DELETE meta')
 
+
+def handle_args():
+    parser = ArgumentParser(description='MAL scrapper')
+
+    parser.add_argument('-u', '--username', type=str, dest='username', help='MAL username to parse', required=True)
+
+    args = parser.parse_args()
+    return args
+
+
 if __name__ == "__main__":
+    args = handle_args()
+
+    username = args.username
+
     try:
-        # update_user(graph, 'Wiles')
+        graph = Graph()
+        # update_user(graph, username)
         # update_shows(graph)
         # update_staff(graph)
-        update_metascores(graph, 1115285)
+        update_metascores(graph, username)
     finally:
         pass
