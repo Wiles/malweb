@@ -3,13 +3,16 @@ const express = require('express');
 const graphQLHTTP = require('express-graphql');
 const path = require('path');
 const { v1 } = require('neo4j-driver');
+const winston = require('winston');
 
 const config = require('./config');
 const schema = require('./data/models');
 
+winston.level = config.winston_level;
+
 const app = express();
 
-const db = v1.driver(config.neo4j_bolt_url)
+const db = v1.driver(config.neo4j_bolt_url);
 
 app.use('/graphql', graphQLHTTP({
   schema,
@@ -35,13 +38,13 @@ app.use('/', (req, res) => {
 });
 
 process.on('uncaughtException', (err) => {
-  console.error(
+  winston.error(
     `Uncaught Exception: Error - ${err.stack || err.message}`
   );
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error(
+  winston.error(
     `Unhandled Rejection: Promise - ${promise} Reaseon - ${reason}`
   );
 });
@@ -49,7 +52,7 @@ process.on('unhandledRejection', (reason, promise) => {
 const httpServer = http.createServer(app);
 
 httpServer.listen(config.graphql.port, () => {
-  console.info(
+  winston.info(
     `GraphQL HTTP server is now running on http://localhost:${config.graphql.port}`
   );
 });

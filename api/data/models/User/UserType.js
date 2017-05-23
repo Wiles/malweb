@@ -1,5 +1,4 @@
-const graphql = require('graphql')
-
+const graphql = require('graphql');
 const { Staff, StaffType } = require('../Staff');
 const { Anime, AnimeType } = require('../Anime');
 

@@ -1,5 +1,7 @@
+const winston = require('winston');
+
 const findByUser = (server, userId, minCount, limit) => {
-  console.log('staff.findByUser')
+  winston.log('staff.findByUser');
   return new Promise((resolve, reject) => {
     const session = server.session();
     session.run(`
@@ -17,23 +19,23 @@ const findByUser = (server, userId, minCount, limit) => {
       limit
     })
     .then(({ records }) => {
-      const r = records.map((r) => {
-        return {
-          id: r.get('id'),
-          name: r.get('name'),
-          metascore: r.get('metascore')
-        }
-      })
+      const r = records.map(record => ({
+        id: record.get('id'),
+        name: record.get('name'),
+        metascore: record.get('metascore'),
+        userId
+      }));
       resolve(r);
     })
     .catch((err) => {
       reject(err);
-    })
+    });
   });
 };
 
+
 const findByAnime = (server, animeId, userId) => {
-  console.log('staff.findByAnime')
+  winston.log('staff.findByAnime');
   return new Promise((resolve, reject) => {
     const session = server.session();
     session.run(`
@@ -52,23 +54,22 @@ const findByAnime = (server, animeId, userId) => {
       userId
     })
     .then(({ records }) => {
-      const r = records.map((r) => {
-        return {
-          id: r.get('id'),
-          name: r.get('name'),
-          metascore: r.get('metascore')
-        }
-      })
+      const r = records.map(record => ({
+        id: record.get('id'),
+        name: record.get('name'),
+        metascore: record.get('metascore'),
+        userId
+      }));
       resolve(r);
     })
     .catch((err) => {
       reject(err);
-    })
+    });
   });
 };
 
 const findById = (server, staffId, userId) => {
-  console.log('staff.findById')
+  winston.log('staff.findById');
   return new Promise((resolve, reject) => {
     const session = server.session();
     session.run(`
@@ -87,19 +88,17 @@ const findById = (server, staffId, userId) => {
       userId
     })
     .then(({ records }) => {
-      const r = records.map((r) => {
-        return {
-          id: r.get('id'),
-          name: r.get('name'),
-          metascore: r.get('metascore'),
-          userId
-        }
-      })
+      const r = records.map(record => ({
+        id: record.get('id'),
+        name: record.get('name'),
+        metascore: record.get('metascore'),
+        userId
+      }));
       resolve(r[0]);
     })
     .catch((err) => {
       reject(err);
-    })
+    });
   });
 };
 
@@ -107,4 +106,4 @@ module.exports = {
   findByUser,
   findById,
   findByAnime
-}
+};

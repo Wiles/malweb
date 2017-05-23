@@ -4,12 +4,12 @@ const {
   GraphQLString,
   GraphQLFloat,
   GraphQLList
-} = require('graphql')
+} = require('graphql');
 
 const AnimeType = new GraphQLObjectType({
   name: 'Anime',
   fields: () => {
-    const { Staff, StaffType } = require('../Staff');
+    const { Staff, StaffType } = require('../Staff'); // eslint-disable-line global-require
     return {
       id: {
         type: GraphQLInt
@@ -28,7 +28,7 @@ const AnimeType = new GraphQLObjectType({
         resolve: ({ id, userId }, params, req, { rootValue: { db } }) =>
           Staff.findByAnime(db, id, userId)
       }
-    }
+    };
   }
 });
 

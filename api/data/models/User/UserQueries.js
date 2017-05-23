@@ -1,5 +1,4 @@
 const graphql = require('graphql');
-
 const UserType = require('./UserType');
 const User = require('./UserSchema');
 

@@ -1,15 +1,23 @@
+const winston = require('winston');
+
 const findByUser = (server, userId, minCount, limit) => {
-  console.log('anime.findByUser');
+  winston.debug('anime.findByUser');
   return new Promise((resolve, reject) => {
     const session = server.session();
     session.run(`
       MATCH (user:User {id: {userId}})-[meta:META_SCORED]->(anime:Anime)
       OPTIONAL MATCH (user)-[rating:Rated]->(anime)
-      RETURN
+      WITH
         anime.id as id,
         anime.name as name,
         meta.value as metascore,
         rating.score as score
+      WHERE score is null
+      RETURN
+        id,
+        name,
+        metascore,
+        score
       ORDER BY metascore DESC
       LIMIT {limit}
     `, {
@@ -18,24 +26,24 @@ const findByUser = (server, userId, minCount, limit) => {
       limit
     })
     .then(({ records }) => {
-      const r = records.map((r) => {
-        return {
-          id: r.get('id'),
-          name: r.get('name'),
-          score: r.get('score'),
-          metascore: r.get('metascore')
-        }
-      })
+      const r = records.map(record => ({
+        id: record.get('id'),
+        name: record.get('name'),
+        score: record.get('score'),
+        metascore: record.get('metascore'),
+        userId
+      }));
       resolve(r);
     })
     .catch((err) => {
       reject(err);
-    })
+    });
   });
 };
 
+
 const findById = (server, animeId, userId) => {
-  console.log('anime.findById');
+  winston.debug('anime.findById');
   return new Promise((resolve, reject) => {
     const session = server.session();
     session.run(`
@@ -55,26 +63,23 @@ const findById = (server, animeId, userId) => {
       userId
     })
     .then(({ records }) => {
-      const r = records.map((r) => {
-        return {
-          id: r.get('id'),
-          name: r.get('name'),
-          score: r.get('score'),
-          metascore: r.get('metascore'),
-          userId
-        }
-      })
-
+      const r = records.map(record => ({
+        id: record.get('id'),
+        name: record.get('name'),
+        score: record.get('score'),
+        metascore: record.get('metascore'),
+        userId
+      }));
       resolve(r[0]);
     })
     .catch((err) => {
       reject(err);
-    })
+    });
   });
 };
 
 const findByStaff = (server, staffId, userId) => {
-  console.log('anime.findByStaff');
+  winston.debug('anime.findByStaff');
   return new Promise((resolve, reject) => {
     const session = server.session();
     session.run(`
@@ -89,19 +94,18 @@ const findByStaff = (server, staffId, userId) => {
       userId
     })
     .then(({ records }) => {
-      const r = records.map((r) => {
-        return {
-          id: r.get('id'),
-          name: r.get('name'),
-          score: r.get('score'),
-          metascore: r.get('metascore')
-        }
-      })
+      const r = records.map(record => ({
+        id: record.get('id'),
+        name: record.get('name'),
+        score: record.get('score'),
+        metascore: record.get('metascore'),
+        userId
+      }));
       resolve(r);
     })
     .catch((err) => {
       reject(err);
-    })
+    });
   });
 };
 
@@ -109,4 +113,4 @@ module.exports = {
   findById,
   findByUser,
   findByStaff
-}
+};

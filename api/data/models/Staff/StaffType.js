@@ -1,10 +1,9 @@
-const graphql = require('graphql')
-
+const graphql = require('graphql');
 
 module.exports = new graphql.GraphQLObjectType({
   name: 'Staff',
   fields: () => {
-    const { Anime, AnimeType } = require('../Anime');
+    const { Anime, AnimeType } = require('../Anime'); // eslint-disable-line global-require
     return {
       id: {
         type: graphql.GraphQLInt
