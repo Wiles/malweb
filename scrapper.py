@@ -8,98 +8,116 @@ from argparse import ArgumentParser
 statuses = ['0', 'watching', 'completed', 'on hold', 'dropped', '5', 'plan to watch']
 
 
-def fetch_anime_staff(request):
+def fetch_anime_staff(html_text):
+    anime_name = None
     staff = {}
-    with urlopen(request, timeout=5) as response:
-        html_content = response.read()
-        encoding = response.headers.get_content_charset('utf-8')
-        html_text = html_content.decode(encoding, errors='ignore')
-        html_text = html_text[html_text.index('Add staff'):]
-        for m in re.findall('/people/\d+/[^"]+', html_text):
-            _, id, name = m[1:-1].split('/')
-            print(f'staff: {id} {name}')
-            staff[id] = name
 
-    return staff
+    anime_name = re.findall('(.*) - Characters &amp; Staff - MyAnimeList.net', html_text)[0]
+    html_text = html_text[html_text.index('Add staff'):]
+    for m in re.findall('/people/\d+/[^"]+', html_text):
+        _, id, name = m[1:-1].split('/')
+        print(f'staff: {id} {name}')
+        staff[id] = name
+
+    return anime_name, staff
 
 
 def update_shows(client):
-        anime_list = client.run('MATCH (anime:Anime) WHERE coalesce(anime.last_updated, 0) < ({now} - 60 * 60 * 24) RETURN anime.id as id, anime.name as name ORDER BY anime.name ASC', {
-            'now': time.time()
-        })
-        for anime in anime_list:
-            try:
-                anime_id = anime['id']
-                anime_name = anime['name']
-                print(f'anime: {anime_id} {anime_name}')
-                staff = fetch_anime_staff(f'https://myanimelist.net/anime/{anime_id}/placeholder/characters')
-                for staff_id, name in staff.items():
-                    print(f'staff: {staff_id} {name}')
-                    client.run('MERGE (staff:Staff {id: toInteger({staff_id})}) SET staff.name = {name}', {
-                        'staff_id': staff_id,
-                        'name': name
-                    })
-                client.run('MERGE (anime:Anime {id: toInteger({anime_id})}) SET anime.last_updated = {now}', {
-                    'anime_id': anime_id,
-                    'now': time.time()
+    count = 0
+    anime_list = client.run('MATCH (anime:Anime) WHERE anime.last_updated < (timestamp() / 1000.0 - (60 * 60 * 24 * 7)) RETURN anime.id as id, anime.page as page ORDER BY id ASC LIMIT 100')
+    for anime in anime_list:
+        count += 1
+        try:
+            anime_id = anime['id']
+            page = anime['page']
+            if page in None:
+                print(f'Fetching staff page {anime_id}')
+                with urlopen(f'https://myanimelist.net/anime/{anime_id}/placeholder/characters', timeout=5) as response:
+                    html_content = response.read()
+                    encoding = response.headers.get_content_charset('utf-8')
+                    page = html_content.decode(encoding, errors='ignore')
+            anime_name, staff = fetch_anime_staff(page)
+            print(f'anime: {anime_id} {anime_name}')
+            for staff_id, name in staff.items():
+                print(f'staff: {staff_id} {name}')
+                client.run('MERGE (staff:Staff {id: toInteger({staff_id})}) SET staff.name = {name}', {
+                    'staff_id': staff_id,
+                    'name': name
                 })
-            except Exception as e:
-                    print(e)
+            client.run('MERGE (anime:Anime {id: toInteger({anime_id})}) SET anime.last_updated = {now} SET anime.page = {page}', {
+                'anime_id': anime_id,
+                'page': page,
+                'now': time.time()
+            })
+        except Exception as e:
+                print(e)
+
+    return count
 
 
-def fetch_staff_anime(request):
+def fetch_staff_anime(html_text):
+    staff_name = None
     anime = {}
-    with urlopen(request, timeout=5) as response:
-        html_content = response.read()
-        encoding = response.headers.get_content_charset('utf-8')
-        html_text = html_content.decode(encoding, errors='ignore')
-        html_text = html_text[html_text.index('Anime Staff Positions'):]
-        for m in re.findall('<a href="\/anime\/(\d+)\/([^"]+)">.+<\/a><div class="spaceit_pad">\s+<a href="[^"]+" title="[^"]+" class="[^"]+">add<\/a>(.+)<\/div>', html_text):
-            anime_id = m[0]
-            name = m[1]
-            position = m[2].replace('<small>', '').replace('</small>', '')
-            if (anime_id in anime):
-                anime[anime_id]['positions'].append(position)
-            else:
-                anime[anime_id] = {'positions': [position], 'name': name}
-    return anime
+
+    staff_name = re.findall('(.*) - MyAnimeList.net', html_text)[0]
+    staff_text = html_text[html_text.index('Anime Staff Positions'):]
+    for m in re.findall('<a href="\/anime\/(\d+)\/([^"]+)">.+<\/a><div class="spaceit_pad">\s+<a href="[^"]+" title="[^"]+" class="[^"]+">add<\/a>(.+)<\/div>', staff_text):
+        anime_id = m[0]
+        name = m[1]
+        position = m[2].replace('<small>', '').replace('</small>', '')
+        if (anime_id in anime):
+            anime[anime_id]['positions'].append(position)
+        else:
+            anime[anime_id] = {'positions': [position], 'name': name}
+
+    return staff_name, anime
 
 
 def update_staff(client):
-        staff_list = client.run('MATCH (staff:Staff) WHERE coalesce(staff.last_updated, 0) < ({now} - 60 * 60 * 24) RETURN staff.id as id, staff.name as name ORDER BY name ASC', {
-            'now': time.time()
-        })
-        for staff in staff_list:
-            try:
-                staff_id = staff['id']
-                name = staff['name']
+    count = 0
+    staff_list = client.run('MATCH (staff:Staff) WHERE staff.last_updated < (timestamp() / 1000.0 - (60 * 60 * 24 * 7)) RETURN staff.id as id, staff.page as page ORDER BY id LIMIT 100')
+    for staff in staff_list:
+        count += 1
+        try:
+            staff_id = staff['id']
+            page = staff['page']
 
-                print(f'staff: {staff_id} {name}')
-                client.run('MATCH (:Staff {id: toInteger({staff_id})})-[r:WorkedOn]->() DELETE r', {
-                    'staff_id': staff_id
+            if page is None:
+                print(f'Fetching staff page {staff_id}')
+                with urlopen(f'https://myanimelist.net/people/{staff_id}', timeout=5) as response:
+                    html_content = response.read()
+                    encoding = response.headers.get_content_charset('utf-8')
+                    page = html_content.decode(encoding, errors='ignore')
+
+            client.run('MATCH (:Staff {id: toInteger({staff_id})})-[r:WorkedOn]->() DELETE r', {
+                'staff_id': staff_id
+            })
+            staff_name, anime_list = fetch_staff_anime(page)
+            print(f'staff: {staff_id} {staff_name}')
+            for anime_id, anime in anime_list.items():
+                name = anime['name']
+                print(f'anime: {anime_id} {name}')
+                positions = anime['positions']
+                client.run('MERGE (anime:Anime {id: toInteger({anime_id})})', {
+                    'anime_id': anime_id
                 })
-                anime_list = fetch_staff_anime(f'https://myanimelist.net/people/{staff_id}')
-                for anime_id, anime in anime_list.items():
-                    name = anime['name']
-                    print(f'anime: {anime_id} {name}')
-                    positions = anime['positions']
-                    client.run('MERGE (anime:Anime {id: toInteger({anime_id})}) SET anime.name = {name}', {
+                for position in positions:
+                    client.run('MATCH (anime {id: toInteger({anime_id})}) MATCH (staff:Staff {id: toInteger({staff_id})}) CREATE (staff)-[r:WorkedOn]->(anime) SET r.position = trim({position})', {
                         'anime_id': anime_id,
-                        'name': name
+                        'staff_id': staff_id,
+                        'position': position
                     })
-                    for position in positions:
-                        client.run('MATCH (anime {id: toInteger({anime_id})}) MATCH (staff:Staff {id: toInteger({staff_id})}) CREATE (staff)-[r:WorkedOn]->(anime) SET r.position = trim({position})', {
-                            'anime_id': anime_id,
-                            'staff_id': staff_id,
-                            'position': position
-                        })
 
-                client.run('MERGE (staff:Staff {id: toInteger({staff_id})}) SET staff.last_updated = {now}', {
-                    'staff_id': staff_id,
-                    'now': time.time()
-                })
-            except Exception as e:
-                print(e)
+            client.run('MERGE (staff:Staff {id: toInteger({staff_id})}) SET staff.last_updated = {now} SET staff.name = {name} SET staff.page = {page}', {
+                'staff_id': staff_id,
+                'name': staff_name,
+                'page': page,
+                'now': time.time()
+            })
+        except Exception as e:
+            print(e)
+
+    return count
 
 
 def fetch_anime_list(request):
@@ -114,12 +132,10 @@ def fetch_anime_list(request):
 
 def handle_anime(client, user_id, anime):
     anime_id = anime['series_animedb_id']
-    name = anime['series_title']
     rating = anime['my_score']
 
-    client.run('MERGE (anime:Anime {id: toInteger({anime_id})}) SET anime.name = {name}', {
-        'anime_id': anime_id,
-        'name': name
+    client.run('MERGE (anime:Anime {id: toInteger({anime_id})})', {
+        'anime_id': anime_id
     })
 
     status = statuses[int(anime['my_status'])]
@@ -230,9 +246,14 @@ if __name__ == "__main__":
 
     try:
         graph = Graph()
-        # update_user(graph, username)
-        # update_shows(graph)
-        # update_staff(graph)
+        update_user(graph, username)
+        while True:
+            staff_count = update_staff(graph)
+            print(f'Updated {staff_count} staff')
+            anime_count = update_shows(graph)
+            print(f'Updated {anime_count} anime')
+            if (staff_count == 0 and anime_count == 0):
+                break
         update_metascores(graph, username)
     finally:
         pass
