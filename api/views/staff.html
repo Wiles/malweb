@@ -6,6 +6,9 @@
       table, th, td {
         border: 1px solid black;
       }
+      td {
+        max-width: 300px;
+      }
       textarea {
         width: 200px;
         height: 200px;
@@ -24,6 +27,7 @@
       <thead>
         <tr>
           <th>Anime</th>
+          <th>Position</th>
           <th>Score</th>
           <th>Meta Score</th>
         </tr>
@@ -36,7 +40,7 @@
         const params = (new URL(document.location)).searchParams;
         const userId = params.get('user');
         const staffId = params.get('id');
-        axios.get(`/graphql?query=query { staff(id: ${staffId}, user: ${userId}) { id name metascore animeList { id name score metascore } } }`)
+        axios.get(`/graphql?query=query { staff(id: ${staffId}, user: ${userId}) { id name metascore animeList { id name score position metascore } } }`)
         .then(({ data }) => {
           const staffTable = document.getElementById('staff');
 
@@ -61,6 +65,10 @@
             a.href = `/anime?id=${anime.id}&user=${userId}`;
             a.innerHTML = anime.name;
             td.append(a);
+            tr.append(td);
+
+            td = document.createElement('td');
+            td.innerHTML = anime.position ? anime.position.join('<br />') : '';
             tr.append(td);
 
             td = document.createElement('td');

@@ -5,18 +5,24 @@
       table, th, td {
         border: 1px solid black;
       }
+      form {
+        width: 100%;
+      }
       textarea {
-        width: 200px;
-        height: 200px;
+        width: 100%;
+        height: 125px;
       }
     </style>
   </head>
   <body>
+    <p>Markdown</p>
+    <form>
+      <textarea id='md'></textarea>
+    </form>
     <p>Top Staff</p>
     <table id='topStaff'>
       <tr>
         <th>Staff</th>
-        <th>md</th>
         <th>Meta Score</th>
       </tr>
     </table>
@@ -24,7 +30,14 @@
     <table id='topAnime'>
       <tr>
         <th>Anime</th>
-        <th>md</th>
+        <th>Score</th>
+        <th>Meta Score</th>
+      </tr>
+    </table>
+    <p>Recommended Anime</p>
+    <table id='recommendedAnime'>
+      <tr>
+        <th>Anime</th>
         <th>Meta Score</th>
       </tr>
     </table>
@@ -33,8 +46,10 @@
         const params = (new URL(document.location)).searchParams;
         const userName = params.get('user');
         let userId;
-        axios.get(`/graphql?query=query { user (name: "${userName}"){ id staffList{ id name metascore } animeList{ id name score metascore } }}`)
+        axios.get(`/graphql?query=query { user (name: "${userName}"){ id staffList{ id name metascore } animeList{ id name score metascore } recommendations{ id name metascore } }}`)
         .then(({ data }) => {
+          const markdown = document.getElementById('md');
+
           userId = data.data.user.id;
           const staffTable = document.getElementById('topStaff');
           data.data.user.staffList.forEach((staff) => {
@@ -49,16 +64,14 @@
             tr.append(td);
 
             td = document.createElement('td');
-            td.innerHTML = `* [${staff.name}](https://myanimelist.net/people/${staff.id})`;
-            tr.append(td);
-
-            td = document.createElement('td');
             td.innerHTML = staff.metascore;
             tr.append(td);
           });
 
           const animeTable = document.getElementById('topAnime');
-          data.data.user.animeList.forEach((anime) => {
+
+          markdown.innerHTML += 'Favorite Anime:\n\n';
+          data.data.user.animeList.forEach((anime, index) => {
             const tr = document.createElement('tr');
             animeTable.append(tr);
 
@@ -69,9 +82,31 @@
             td.append(a);
             tr.append(td);
 
+            markdown.innerHTML += `${index + 1}. [${anime.name}](https://myanimelist.net/anime/${anime.id})\n`;
+
             td = document.createElement('td');
-            td.innerHTML = `* [${anime.name}](https://myanimelist.net/anime/${anime.id})`;
+            td.innerHTML = anime.score.toPrecision(4);
             tr.append(td);
+
+            td = document.createElement('td');
+            td.innerHTML = anime.metascore.toPrecision(4);
+            tr.append(td);
+          });
+
+          const recommendedTable = document.getElementById('recommendedAnime');
+          markdown.innerHTML += '\nRecommendations:\n\n';
+          data.data.user.recommendations.forEach((anime, index) => {
+            const tr = document.createElement('tr');
+            recommendedTable.append(tr);
+
+            let td = document.createElement('td');
+            const a = document.createElement('a');
+            a.href = `/anime?id=${anime.id}&user=${userId}`;
+            a.innerHTML = anime.name;
+            td.append(a);
+            tr.append(td);
+
+            markdown.innerHTML += `${index + 1}. [${anime.name}](https://myanimelist.net/anime/${anime.id})\n`;
 
             td = document.createElement('td');
             td.innerHTML = anime.metascore.toPrecision(4);

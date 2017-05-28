@@ -12,7 +12,7 @@ const findByUser = (server, userId, limit) => {
         anime.name as name,
         meta.value as metascore,
         rating.score as score
-      WHERE score is null
+      WHERE score > 0
       RETURN
         id,
         name,
@@ -40,6 +40,45 @@ const findByUser = (server, userId, limit) => {
   });
 };
 
+const findRecommendedByUser = (server, userId, limit) => {
+  winston.debug(`anime.findByUser ${userId}`);
+  return new Promise((resolve, reject) => {
+    const session = server.session();
+    session.run(`
+      MATCH (user:User {id: {userId}})-[meta:META_SCORED]->(anime:Anime)
+      OPTIONAL MATCH (user)-[rating:Rated]->(anime)
+      WITH
+        anime.id as id,
+        anime.name as name,
+        meta.value as metascore,
+        rating.score as score
+      WHERE score is null OR score = 0
+      RETURN
+        id,
+        name,
+        metascore,
+        score
+      ORDER BY metascore DESC
+      LIMIT {limit}
+    `, {
+      userId,
+      limit
+    })
+    .then(({ records }) => {
+      const r = records.map(record => ({
+        id: record.get('id'),
+        name: record.get('name'),
+        score: record.get('score'),
+        metascore: record.get('metascore'),
+        userId
+      }));
+      resolve(r);
+    })
+    .catch((err) => {
+      reject(err);
+    });
+  });
+};
 
 const findById = (server, animeId, userId) => {
   winston.debug('anime.findById');
@@ -82,11 +121,12 @@ const findByStaff = (server, staffId, userId) => {
   return new Promise((resolve, reject) => {
     const session = server.session();
     session.run(`
-      MATCH (:Staff {id: {staffId}})-[:HAS_JOB]->(:Job)-[:FOR]->(anime:Anime)
+      MATCH (:Staff {id: {staffId}})-[:HAS_JOB]->(job:Job)-[:FOR]->(anime:Anime),
+        (job)-[:HAS]->(position:Position)
       MATCH (user:User {id: {userId}})
       OPTIONAL MATCH (user)-[rating:Rated]->(anime)
       OPTIONAL MATCH (user)-[meta:META_SCORED]->(anime)
-      RETURN anime.id as id, anime.name as name, meta.value as metascore, rating.score as score
+      RETURN anime.id as id, anime.name as name, meta.value as metascore, rating.score as score, collect(position.name) as position
       ORDER BY name
     `, {
       staffId,
@@ -98,6 +138,7 @@ const findByStaff = (server, staffId, userId) => {
         name: record.get('name'),
         score: record.get('score'),
         metascore: record.get('metascore'),
+        position: record.get('position'),
         userId
       }));
       resolve(r);
@@ -110,6 +151,7 @@ const findByStaff = (server, staffId, userId) => {
 
 module.exports = {
   findById,
+  findRecommendedByUser,
   findByUser,
   findByStaff
 };

@@ -14,7 +14,6 @@ const app = express();
 
 const db = v1.driver(config.neo4j_bolt_url);
 
-console.log(path.join(__dirname, 'view/lib'))
 app.use('/lib', express.static(path.join(__dirname, 'views/lib')));
 
 app.use('/graphql', graphQLHTTP({

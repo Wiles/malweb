@@ -23,6 +23,9 @@ const AnimeType = new GraphQLObjectType({
       metascore: {
         type: GraphQLFloat
       },
+      position: {
+        type: new GraphQLList(GraphQLString)
+      },
       staffList: {
         type: new GraphQLList(StaffType),
         resolve: ({ id, userId }, params, req, { rootValue: { db } }) =>

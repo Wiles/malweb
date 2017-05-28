@@ -39,14 +39,16 @@ const findByAnime = (server, animeId, userId) => {
     const session = server.session();
     session.run(`
       MATCH
-        (:Anime {id: {animeId}})<-[:FOR]-(:Job)<-[:HAS_JOB]-(staff:Staff)
+        (:Anime {id: {animeId}})<-[:FOR]-(job:Job)<-[:HAS_JOB]-(staff:Staff),
+        (job)-[:HAS]->(position:Position)
       OPTIONAL MATCH
         (user:User {id: {userId}})-[meta:META_SCORED]->(staff)
       WITH
         staff.id as id,
         staff.name as name,
-        meta.value as metascore
-      RETURN id, name, metascore
+        meta.value as metascore,
+        COLLECT(position.name) as position
+      RETURN id, name, metascore, position
       ORDER BY name
     `, {
       animeId,
@@ -57,6 +59,7 @@ const findByAnime = (server, animeId, userId) => {
         id: record.get('id'),
         name: record.get('name'),
         metascore: record.get('metascore'),
+        position: record.get('position'),
         userId
       }));
       resolve(r);
@@ -73,13 +76,14 @@ const findById = (server, staffId, userId) => {
     const session = server.session();
     session.run(`
       MATCH
-        (staff:Staff {id: {staffId}})
+        (staff:Staff {id: {staffId}})-[:HAS_JOB]->(:Job)-[:HAS]->(position:Position)
       OPTIONAL MATCH
         (user:User {id: {userId}})-[meta:META_SCORED]->(staff)
       WITH
         staff.id as id,
         staff.name as name,
-        meta.value as metascore
+        meta.value as metascore,
+        collect(distinct position.name) as position
       RETURN id, name, metascore
       ORDER BY metascore
     `, {

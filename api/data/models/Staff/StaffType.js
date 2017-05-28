@@ -1,21 +1,30 @@
-const graphql = require('graphql');
+const {
+  GraphQLObjectType,
+  GraphQLInt,
+  GraphQLString,
+  GraphQLFloat,
+  GraphQLList
+} = require('graphql');
 
-module.exports = new graphql.GraphQLObjectType({
+module.exports = new GraphQLObjectType({
   name: 'Staff',
   fields: () => {
     const { Anime, AnimeType } = require('../Anime'); // eslint-disable-line global-require
     return {
       id: {
-        type: graphql.GraphQLInt
+        type: GraphQLInt
       },
       name: {
-        type: graphql.GraphQLString
+        type: GraphQLString
       },
       metascore: {
-        type: graphql.GraphQLFloat
+        type: GraphQLFloat
+      },
+      position: {
+        type: new GraphQLList(GraphQLString)
       },
       animeList: {
-        type: new graphql.GraphQLList(AnimeType),
+        type: new GraphQLList(AnimeType),
         resolve: ({ id, userId }, params, req, { rootValue: { db } }) =>
           Anime.findByStaff(db, id, userId)
       }
