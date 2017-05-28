@@ -25,6 +25,10 @@ app.use('/axios.min.js', (req, res) => {
   res.sendFile(path.join(__dirname, 'views/axios.min.js'));
 });
 
+app.use('/sorttable.js', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views/sorttable.js'));
+});
+
 app.use('/anime', (req, res) => {
   res.sendFile(path.join(__dirname, 'views/anime.html'));
 });

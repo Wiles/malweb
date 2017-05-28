@@ -1,12 +1,10 @@
 <html>
   <head>
     <script src="/axios.min.js"></script>
+    <script src="/sorttable.js"></script>
     <style>
       table, th, td {
         border: 1px solid black;
-      }
-      td {
-        width: 100px;
       }
       textarea {
         width: 200px;
@@ -24,10 +22,14 @@
     </table>
     <p>Staff</p>
     <table id='staff'>
-      <tr>
-        <th>Staff</th>
-        <th>Meta Score</th>
-      </tr>
+      <thead>
+        <tr>
+          <th>Staff</th>
+          <th>Meta Score</th>
+        </tr>
+      </thead>
+      <tbody id='staff_body'>
+      </tbody>
     </table>
     <script>
       (function() {
@@ -51,10 +53,10 @@
           tr.append(td);
 
           td = document.createElement('td');
-          td.innerHTML = data.data.anime.metascore
+          td.innerHTML = data.data.anime.metascore;
           tr.append(td);
 
-          const staffTable = document.getElementById('staff');
+          const staffTable = document.getElementById('staff_body');
           data.data.anime.staffList.forEach((staff) => {
 
             const tr = document.createElement('tr');
@@ -69,9 +71,10 @@
 
 
             td = document.createElement('td');
-            td.innerHTML = staff.metascore?staff.metascore.toPrecision(3):'';
+            td.innerHTML = staff.metascore?staff.metascore.toPrecision(4):'';
             tr.append(td);
           })
+          sorttable.makeSortable(document.getElementById('staff'));
         })
         .catch((error) => {
           console.error(error);
