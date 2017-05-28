@@ -5,6 +5,7 @@ services:
     image: neo4j:3.1.0
     environment:
       - NEO4J_AUTH=none
+      - NEO4J_dbms_memory_heap_maxSize=8G
     volumes:
       - ./volumes/neo4j/data:/data
       - ./volumes/neo4j/logs:/logs
