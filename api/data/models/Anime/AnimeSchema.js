@@ -1,7 +1,7 @@
 const winston = require('winston');
 
-const findByUser = (server, userId, minCount, limit) => {
-  winston.debug('anime.findByUser');
+const findByUser = (server, userId, limit) => {
+  winston.debug(`anime.findByUser ${userId}`);
   return new Promise((resolve, reject) => {
     const session = server.session();
     session.run(`
@@ -22,7 +22,6 @@ const findByUser = (server, userId, minCount, limit) => {
       LIMIT {limit}
     `, {
       userId,
-      minCount,
       limit
     })
     .then(({ records }) => {
@@ -79,11 +78,11 @@ const findById = (server, animeId, userId) => {
 };
 
 const findByStaff = (server, staffId, userId) => {
-  winston.debug('anime.findByStaff');
+  winston.debug(`anime.findByStaff ${staffId} ${userId}`);
   return new Promise((resolve, reject) => {
     const session = server.session();
     session.run(`
-      MATCH (:Staff {id: {staffId}})-[:WorkedOn]->(anime:Anime)
+      MATCH (:Staff {id: {staffId}})-[:HAS_JOB]->(:Job)-[:FOR]->(anime:Anime)
       MATCH (user:User {id: {userId}})
       OPTIONAL MATCH (user)-[rating:Rated]->(anime)
       OPTIONAL MATCH (user)-[meta:META_SCORED]->(anime)

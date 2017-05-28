@@ -4,6 +4,8 @@ import re
 from py2neo import Graph
 import time
 from argparse import ArgumentParser
+from pathlib import Path
+import traceback
 
 statuses = ['0', 'watching', 'completed', 'on hold', 'dropped', '5', 'plan to watch']
 
@@ -13,44 +15,66 @@ def fetch_anime_staff(html_text):
     staff = {}
 
     anime_name = re.findall('(.*) - Characters &amp; Staff - MyAnimeList.net', html_text)[0]
-    html_text = html_text[html_text.index('Add staff'):]
-    for m in re.findall('/people/\d+/[^"]+', html_text):
-        _, id, name = m[1:-1].split('/')
-        print(f'staff: {id} {name}')
-        staff[id] = name
+    try:
+        html_text = html_text[html_text.index('Add staff'):]
+        for m in re.findall('/people/\d+/[^"]+', html_text):
+            _, id, name = m[1:-1].split('/')
+            staff[id] = name
+    except:
+        pass
 
     return anime_name, staff
 
 
 def update_shows(client):
     count = 0
-    anime_list = client.run('MATCH (anime:Anime) WHERE anime.last_updated < (timestamp() / 1000.0 - (60 * 60 * 24 * 7)) RETURN anime.id as id, anime.page as page ORDER BY id ASC LIMIT 100')
+    anime_list = client.run('''
+        MATCH (anime:Anime)
+        WHERE anime.last_updated < (timestamp() / 1000.0 - (60 * 60 * 24 * 7))
+        RETURN anime.id as id
+        ORDER BY id ASC
+    ''').data()
+    total = len(anime_list)
+    start_time = time.time()
     for anime in anime_list:
-        count += 1
         try:
             anime_id = anime['id']
-            page = anime['page']
-            if page in None:
-                print(f'Fetching staff page {anime_id}')
+            page = None
+
+            anime_file = Path(f'volumes/pages/anime/{anime_id}.html')
+            if anime_file.is_file():
+                with open(f'volumes/pages/anime/{anime_id}.html', 'r') as text_file:
+                    page = text_file.read()
+            else:
+                print(f'Fetching anime page {anime_id}')
                 with urlopen(f'https://myanimelist.net/anime/{anime_id}/placeholder/characters', timeout=5) as response:
                     html_content = response.read()
                     encoding = response.headers.get_content_charset('utf-8')
                     page = html_content.decode(encoding, errors='ignore')
+
+                with open(f'volumes/pages/anime/{anime_id}.html', 'w') as text_file:
+                    text_file.write(page)
+
             anime_name, staff = fetch_anime_staff(page)
-            print(f'anime: {anime_id} {anime_name}')
             for staff_id, name in staff.items():
-                print(f'staff: {staff_id} {name}')
-                client.run('MERGE (staff:Staff {id: toInteger({staff_id})}) SET staff.name = {name}', {
-                    'staff_id': staff_id,
-                    'name': name
+                client.run('MERGE (staff:Staff {id: toInteger({staff_id})})', {
+                    'staff_id': staff_id
                 })
-            client.run('MERGE (anime:Anime {id: toInteger({anime_id})}) SET anime.last_updated = {now} SET anime.page = {page}', {
-                'anime_id': anime_id,
-                'page': page,
-                'now': time.time()
+            client.run('''
+                MERGE (anime:Anime {id: toInteger({anime_id})})
+                SET anime.last_updated = (timestamp() / 1000.0)
+                REMOVE anime.page
+            ''', {
+                'anime_id': anime_id
             })
-        except Exception as e:
-                print(e)
+
+            count += 1
+            print(f'anime: {anime_id} {anime_name}')
+            average = (time.time() - start_time) / count
+            minutes = (average * (total - count)) / 60
+            print(f'Remaining: {total - count} Min: {round(minutes)} Average: {round(average, 2)}')
+        except:
+            traceback.print_exc()
 
     return count
 
@@ -63,59 +87,84 @@ def fetch_staff_anime(html_text):
     staff_text = html_text[html_text.index('Anime Staff Positions'):]
     for m in re.findall('<a href="\/anime\/(\d+)\/([^"]+)">.+<\/a><div class="spaceit_pad">\s+<a href="[^"]+" title="[^"]+" class="[^"]+">add<\/a>(.+)<\/div>', staff_text):
         anime_id = m[0]
-        name = m[1]
         position = m[2].replace('<small>', '').replace('</small>', '')
         if (anime_id in anime):
             anime[anime_id]['positions'].append(position)
         else:
-            anime[anime_id] = {'positions': [position], 'name': name}
+            anime[anime_id] = {'positions': [position]}
 
     return staff_name, anime
 
 
 def update_staff(client):
     count = 0
-    staff_list = client.run('MATCH (staff:Staff) WHERE staff.last_updated < (timestamp() / 1000.0 - (60 * 60 * 24 * 7)) RETURN staff.id as id, staff.page as page ORDER BY id LIMIT 100')
+    staff_list = client.run('''
+        MATCH (staff:Staff)
+            WHERE staff.last_updated < (timestamp() / 1000.0 - (60 * 60 * 24 * 7))
+        RETURN staff.id as id ORDER BY id
+    ''').data()
+
+    client.run('''
+        MATCH (staff:Staff)-[:HAS_JOB]->(j:Job)
+            WHERE staff.last_updated < (timestamp() / 1000.0 - (60 * 60 * 24 * 7))
+        DETACH DELETE j
+    ''')
+    total = len(staff_list)
+    start_time = time.time()
     for staff in staff_list:
-        count += 1
         try:
             staff_id = staff['id']
-            page = staff['page']
+            page = None
 
-            if page is None:
+            staff_file = Path(f'volumes/pages/staff/{staff_id}.html')
+            if staff_file.is_file():
+                with open(f'volumes/pages/staff/{staff_id}.html', 'r') as text_file:
+                    page = text_file.read()
+            else:
                 print(f'Fetching staff page {staff_id}')
                 with urlopen(f'https://myanimelist.net/people/{staff_id}', timeout=5) as response:
                     html_content = response.read()
                     encoding = response.headers.get_content_charset('utf-8')
                     page = html_content.decode(encoding, errors='ignore')
 
-            client.run('MATCH (:Staff {id: toInteger({staff_id})})-[r:WorkedOn]->() DELETE r', {
-                'staff_id': staff_id
-            })
+                with open(f'volumes/pages/staff/{staff_id}.html', 'w') as text_file:
+                    text_file.write(page)
+
             staff_name, anime_list = fetch_staff_anime(page)
-            print(f'staff: {staff_id} {staff_name}')
             for anime_id, anime in anime_list.items():
-                name = anime['name']
-                print(f'anime: {anime_id} {name}')
                 positions = anime['positions']
                 client.run('MERGE (anime:Anime {id: toInteger({anime_id})})', {
                     'anime_id': anime_id
                 })
-                for position in positions:
-                    client.run('MATCH (anime {id: toInteger({anime_id})}) MATCH (staff:Staff {id: toInteger({staff_id})}) CREATE (staff)-[r:WorkedOn]->(anime) SET r.position = trim({position})', {
-                        'anime_id': anime_id,
-                        'staff_id': staff_id,
-                        'position': position
-                    })
 
-            client.run('MERGE (staff:Staff {id: toInteger({staff_id})}) SET staff.last_updated = {now} SET staff.name = {name} SET staff.page = {page}', {
+                client.run('''
+                    MATCH (anime:Anime {id: toInteger({anime_id})})
+                    MATCH (staff:Staff {id: toInteger({staff_id})})
+                    CREATE (job:Job)
+                    CREATE (staff)-[:HAS_JOB]->(job)-[:FOR]->(anime)
+                    FOREACH (p in {positions} | MERGE (po:Position {name: TRIM(p)}) CREATE (job)-[:HAS]->(po))
+                ''', {
+                    'anime_id': anime_id,
+                    'staff_id': staff_id,
+                    'positions': positions
+                })
+
+            client.run('''
+                MERGE (staff:Staff {id: toInteger({staff_id})})
+                SET staff.last_updated = (timestamp() / 1000.0)
+                SET staff.name = {name} REMOVE staff.page
+            ''', {
                 'staff_id': staff_id,
-                'name': staff_name,
-                'page': page,
-                'now': time.time()
+                'name': staff_name
             })
-        except Exception as e:
-            print(e)
+
+            count += 1
+            print(f'staff: {staff_id} {staff_name}')
+            average = (time.time() - start_time) / count
+            minutes = (average * (total - count)) / 60
+            print(f'Remaining: {total - count} Min: {round(minutes)} Average: {round(average, 2)}')
+        except:
+            traceback.print_exc()
 
     return count
 
@@ -164,70 +213,80 @@ def update_user(client, name):
         })
         for anime in anime_list:
             handle_anime(client, user_id, anime)
-    except Exception as e:
-        print(e)
+    except:
+        traceback.print_exc()
 
 
 def update_metascores(client, name):
     print(f'Metascore: {name}')
-    client.run('MATCH (user:User {name: {name}})-[s:META_SCORED]->() DETACH DELETE s', {
+    client.run('''
+        MATCH (user:User {name: {name}})-[s:META_SCORED]->()
+        DETACH DELETE s
+    ''', {
         'name': name
     })
 
     positions = [
-        'Key Animation',
-        'Director',
         'Original Creator',
-        'Character Design',
-        'Art Director',
-        'Script',
-        'Animation Director',
-        'Storyboard',
-        'Series Composition',
-        'Episode Director',
-        'Producer',
-        'Color Design',
-        'Chief Animation Director',
-        'Director of Photography',
+        'Director',
+        'Key Animation',
         'Music',
-        'Sound Effects',
+        'Character Design',
+        'Script',
+        'Sound Director',
+        'Storyboard',
+        'Animation Director',
+        'Series Composition',
+        'Original Character Design',
+        'Art Director',
+        'Producer',
+        'Screenplay',
+        'Chief Animation Director',
         'Mechanical Design',
+        'Planning',
+        'Sound Effects',
+        'Color Design',
+        'Creator',
+        'Director of Photography',
         'Director (Chief Director)'
     ]
 
     client.run('''
-        MATCH (user:User {name: {name}})-[rating:Rated]->(anime:Anime)<-[position:WorkedOn]-(staff:Staff)
-        WHERE position.position in {position}
+        MATCH (user:User {name: {name}})-[rating:Rated]->(anime:Anime)<-[:FOR]-(job:Job)<-[:HAS_JOB]-(staff:Staff), (job)-[:HAS]->(position:Position)
+        WITH
+            user,
+            staff,
+            anime,
+            rating,
+            collect(position.name) as positions
+        WHERE
+            ANY(x in positions WHERE (x in {positions}))
         WITH
             user,
             count(anime) as count,
             staff,
-            avg(rating.score) as metascore
+            sum(rating.score) as metascore
         CREATE (user)-[score:META_SCORED]->(staff)
         SET score.value = metascore
         SET score.count = count
     ''', {
         'name': name,
-        'position': positions
+        'positions': positions
     })
 
-    client.run('MATCH ()-[meta:META_SCORED]-() WHERE meta.count <= 5 DETACH DELETE meta')
-
     client.run('''
-        MATCH (user:User {name: {name}})-[score:META_SCORED]->(staff:Staff)-[:WorkedOn]->(anime:Anime)
+        MATCH (user:User {name: {name}})-[score:META_SCORED]->(staff:Staff)-[:HAS_JOB]->(:Job)-[:FOR]->(anime:Anime)
         WITH
             user,
             count(staff) as count,
             anime,
-            avg(score.value) as metascore
+            sum(score.value) as metascore
         CREATE (user)-[score:META_SCORED]->(anime)
         SET score.value = metascore
         set score.count = count
     ''', {
         'name': name
     })
-
-    client.run('MATCH ()-[meta:META_SCORED]-() WHERE meta.count <= 5 DETACH DELETE meta')
 
 
 def handle_args():
@@ -244,16 +303,13 @@ if __name__ == "__main__":
 
     username = args.username
 
-    try:
-        graph = Graph()
-        update_user(graph, username)
-        while True:
-            staff_count = update_staff(graph)
-            print(f'Updated {staff_count} staff')
-            anime_count = update_shows(graph)
-            print(f'Updated {anime_count} anime')
-            if (staff_count == 0 and anime_count == 0):
-                break
-        update_metascores(graph, username)
-    finally:
-        pass
+    graph = Graph()
+    update_user(graph, username)
+    while True:
+        staff_count = update_staff(graph)
+        print(f'Updated {staff_count} staff')
+        anime_count = update_shows(graph)
+        print(f'Updated {anime_count} anime')
+        if (staff_count == 0 and anime_count == 0):
+            break
+    update_metascores(graph, username)

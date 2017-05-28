@@ -14,12 +14,12 @@ module.exports = new graphql.GraphQLObjectType({
     staffList: {
       type: new graphql.GraphQLList(StaffType),
       resolve: ({ id }, params, req, { rootValue: { db } }) =>
-        Staff.findByUser(db, id, 10, 10)
+        Staff.findByUser(db, id, 25)
     },
     animeList: {
       type: new graphql.GraphQLList(AnimeType),
       resolve: ({ id }, params, req, { rootValue: { db } }) =>
-        Anime.findByUser(db, id, 10, 10)
+        Anime.findByUser(db, id, 25)
     }
   })
 });

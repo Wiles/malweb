@@ -5,9 +5,6 @@
       table, th, td {
         border: 1px solid black;
       }
-      td {
-        width: 100px;
-      }
       textarea {
         width: 200px;
         height: 200px;
@@ -19,6 +16,7 @@
     <table id='topStaff'>
       <tr>
         <th>Staff</th>
+        <th>md</th>
         <th>Meta Score</th>
       </tr>
     </table>
@@ -26,28 +24,32 @@
     <table id='topAnime'>
       <tr>
         <th>Anime</th>
-        <th>Score</th>
+        <th>md</th>
         <th>Meta Score</th>
       </tr>
     </table>
     <script>
-      (function() {
-        const user = {
-          name: 'Wiles',
-          id: 1115285
-        }
-        axios.get(`/graphql?query=query { user (name: "${user.name}"){ staffList{ id name metascore } animeList{ id name score metascore } }}`)
-        .then(({data}) => {
+      (() => {
+        const params = (new URL(document.location)).searchParams;
+        const userName = params.get('user');
+        let userId;
+        axios.get(`/graphql?query=query { user (name: "${userName}"){ id staffList{ id name metascore } animeList{ id name score metascore } }}`)
+        .then(({ data }) => {
+          userId = data.data.user.id;
           const staffTable = document.getElementById('topStaff');
           data.data.user.staffList.forEach((staff) => {
             const tr = document.createElement('tr');
             staffTable.append(tr);
 
             let td = document.createElement('td');
-            let a = document.createElement('a');
-            a.href = `/staff?id=${staff.id}&user=${user.id}`;
+            const a = document.createElement('a');
+            a.href = `/staff?id=${staff.id}&user=${userId}`;
             a.innerHTML = staff.name;
             td.append(a);
+            tr.append(td);
+
+            td = document.createElement('td');
+            td.innerHTML = `* [${staff.name}](https://myanimelist.net/people/${staff.id})`;
             tr.append(td);
 
             td = document.createElement('td');
@@ -57,29 +59,28 @@
 
           const animeTable = document.getElementById('topAnime');
           data.data.user.animeList.forEach((anime) => {
-
             const tr = document.createElement('tr');
             animeTable.append(tr);
 
             let td = document.createElement('td');
-            let a = document.createElement('a');
-            a.href = `/anime?id=${anime.id}&user=${user.id}`;
+            const a = document.createElement('a');
+            a.href = `/anime?id=${anime.id}&user=${userId}`;
             a.innerHTML = anime.name;
             td.append(a);
             tr.append(td);
 
             td = document.createElement('td');
-            td.innerHTML = anime.score;
+            td.innerHTML = `* [${anime.name}](https://myanimelist.net/anime/${anime.id})`;
             tr.append(td);
 
             td = document.createElement('td');
-            td.innerHTML = anime.metascore.toPrecision(3);
+            td.innerHTML = anime.metascore.toPrecision(4);
             tr.append(td);
-          })
+          });
         })
         .catch((error) => {
           console.error(error);
-        })
+        });
       })();
     </script>
   </body>
