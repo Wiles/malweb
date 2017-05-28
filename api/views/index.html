@@ -1,6 +1,6 @@
 <html>
   <head>
-    <script src="/axios.min.js"></script>
+    <script src="/lib/axios.min.js"></script>
     <style>
       table, th, td {
         border: 1px solid black;
@@ -79,7 +79,7 @@
           });
         })
         .catch((error) => {
-          console.error(error);
+          console.error(error); // eslint-disable-line no-console
         });
       })();
     </script>

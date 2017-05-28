@@ -1,7 +1,7 @@
 <html>
   <head>
-    <script src="/axios.min.js"></script>
-    <script src="/sorttable.js"></script>
+    <script src="/lib/axios.min.js"></script>
+    <script src="/lib/sorttable.js"></script>
     <style>
       table, th, td {
         border: 1px solid black;
@@ -32,19 +32,19 @@
       </tbody>
     </table>
     <script>
-      (function() {
+      (() => {
         const params = (new URL(document.location)).searchParams;
-        const userId = params.get("user");
-        const animeId = params.get("id");
+        const userId = params.get('user');
+        const animeId = params.get('id');
         axios.get(`/graphql?query=query { anime(id: ${animeId}, user: ${userId}) { id name score metascore staffList { id name metascore } } }`)
-        .then(({data}) => {
+        .then(({ data }) => {
           const animeTable = document.getElementById('anime');
 
 
-          const tr = document.createElement('tr');
+          let tr = document.createElement('tr');
           animeTable.append(tr);
 
-          td = document.createElement('td');
+          let td = document.createElement('td');
           td.innerHTML = data.data.anime.name;
           tr.append(td);
 
@@ -58,12 +58,11 @@
 
           const staffTable = document.getElementById('staff_body');
           data.data.anime.staffList.forEach((staff) => {
-
-            const tr = document.createElement('tr');
+            tr = document.createElement('tr');
             staffTable.append(tr);
 
-            let td = document.createElement('td');
-            let a = document.createElement('a');
+            td = document.createElement('td');
+            const a = document.createElement('a');
             a.href = `/staff?id=${staff.id}&user=${userId}`;
             a.innerHTML = staff.name;
             td.append(a);
@@ -71,14 +70,14 @@
 
 
             td = document.createElement('td');
-            td.innerHTML = staff.metascore?staff.metascore.toPrecision(4):'';
+            td.innerHTML = staff.metascore ? staff.metascore.toPrecision(4) : '';
             tr.append(td);
-          })
+          });
           sorttable.makeSortable(document.getElementById('staff'));
         })
         .catch((error) => {
-          console.error(error);
-        })
+          console.error(error); // eslint-disable-line no-console
+        });
       })();
     </script>
   </body>

@@ -14,20 +14,15 @@ const app = express();
 
 const db = v1.driver(config.neo4j_bolt_url);
 
+console.log(path.join(__dirname, 'view/lib'))
+app.use('/lib', express.static(path.join(__dirname, 'views/lib')));
+
 app.use('/graphql', graphQLHTTP({
   schema,
   rootValue: { db },
   pretty: true,
   graphiql: true
 }));
-
-app.use('/axios.min.js', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/axios.min.js'));
-});
-
-app.use('/sorttable.js', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/sorttable.js'));
-});
 
 app.use('/anime', (req, res) => {
   res.sendFile(path.join(__dirname, 'views/anime.html'));
