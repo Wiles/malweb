@@ -169,14 +169,10 @@ def update_staff(client):
     return count
 
 
-def fetch_anime_list(request):
-    with urlopen(request, timeout=5) as response:
-        html_content = response.read()
-        encoding = response.headers.get_content_charset('utf-8')
-        html_text = html_content.decode(encoding, errors='ignore')
-        anime_list = xmltodict.parse(html_text)['myanimelist']
-        user = anime_list.pop('myinfo')
-        return user, anime_list['anime']
+def fetch_anime_list(html_text):
+    anime_list = xmltodict.parse(html_text)['myanimelist']
+    user = anime_list.pop('myinfo')
+    return user, anime_list['anime']
 
 
 def handle_anime(client, user_id, anime):
@@ -199,8 +195,22 @@ def handle_anime(client, user_id, anime):
 def update_user(client, name):
     print(f'User: {name}')
     try:
-        list_page = f'https://myanimelist.net/malappinfo.php?u={name}&status=all&type=anime'
-        user, anime_list = fetch_anime_list(list_page)
+        staff_file = Path(f'volumes/pages/user/{name}.html')
+        page = None
+        if staff_file.is_file():
+            with open(f'volumes/pages/user/{name}.html', 'r') as text_file:
+                page = text_file.read()
+        else:
+            print(f'Fetching user page {name}')
+            with urlopen(f'https://myanimelist.net/malappinfo.php?u={name}&status=all&type=anime', timeout=5) as response:
+                html_content = response.read()
+                encoding = response.headers.get_content_charset('utf-8')
+                page = html_content.decode(encoding, errors='ignore')
+
+            with open(f'volumes/pages/user/{name}.html', 'w') as text_file:
+                text_file.write(page)
+
+        user, anime_list = fetch_anime_list(page)
 
         user_id = user['user_id']
         name = user['user_name']
@@ -253,6 +263,7 @@ def update_metascores(client, name):
 
     client.run('''
         MATCH (user:User {name: {name}})-[rating:Rated]->(anime:Anime)<-[:FOR]-(job:Job)<-[:HAS_JOB]-(staff:Staff), (job)-[:HAS]->(position:Position)
+        WHERE rating.score > 0
         WITH
             user,
             staff,
@@ -264,10 +275,11 @@ def update_metascores(client, name):
         WITH
             user,
             count(anime) as count,
+            count(rating) as ratings,
             staff,
-            sum(rating.score) as metascore
+            avg(rating.score) as metascore
         CREATE (user)-[score:META_SCORED]->(staff)
-        SET score.value = metascore
+        SET score.value = ((metascore * ratings) + (6.91 * 10) / (ratings + 10))
         SET score.count = count
     ''', {
         'name': name,
@@ -275,14 +287,15 @@ def update_metascores(client, name):
     })
 
     client.run('''
-        MATCH (user:User {name: {name}})-[score:META_SCORED]->(staff:Staff)-[:HAS_JOB]->(:Job)-[:FOR]->(anime:Anime)
+        MATCH (user:User {name: {name}})-[staff_score:META_SCORED]->(staff:Staff)-[:HAS_JOB]->(:Job)-[:FOR]->(anime:Anime)
         WITH
             user,
             count(staff) as count,
+            count(staff_score) as scores,
             anime,
-            sum(score.value) as metascore
+            avg(staff_score.value) as metascore
         CREATE (user)-[score:META_SCORED]->(anime)
-        SET score.value = metascore
+        SET score.value = (((metascore * scores) + (6.91 * 10)) / (scores + 10))
         set score.count = count
     ''', {
         'name': name
