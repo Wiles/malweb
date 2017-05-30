@@ -279,7 +279,7 @@ def update_metascores(client, name):
             staff,
             avg(rating.score) as metascore
         CREATE (user)-[score:META_SCORED]->(staff)
-        SET score.value = ((metascore * ratings) + (6.91 * 10) / (ratings + 10))
+        SET score.value = ((metascore * ratings) + (6.91 * 10)) / (ratings + 10)
         SET score.count = count
     ''', {
         'name': name,
@@ -295,7 +295,7 @@ def update_metascores(client, name):
             anime,
             avg(staff_score.value) as metascore
         CREATE (user)-[score:META_SCORED]->(anime)
-        SET score.value = (((metascore * scores) + (6.91 * 10)) / (scores + 10))
+        SET score.value = ((metascore * scores) + (6.91 * 100)) / (scores + 100)
         set score.count = count
     ''', {
         'name': name
